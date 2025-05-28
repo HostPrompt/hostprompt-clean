@@ -49,7 +49,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
 export const insertPropertySchema = createInsertSchema(properties)
 .omit({ id: true })
 .extend({
-   hostSignature: z.string().nullable(), 
+   hostSignature: z.string(), 
 });
 
 export const insertContentSchema = createInsertSchema(contents).omit({
