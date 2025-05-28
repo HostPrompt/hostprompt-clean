@@ -120,7 +120,7 @@ export class DatabaseStorage implements IStorage {
 
   return result?.rowCount !== null && result?.rowCount > 0;
 }
-
+}
 // Temporary memory storage for demonstration
 export class MemStorage implements IStorage {
   private users: Map<number, User>;

@@ -24,7 +24,7 @@ export const properties = pgTable("properties", {
   useBrandVoiceDefault: boolean("use_brand_voice_default").default(false),
   photos: text("photos").default("[]"), // JSON string of photo objects
   savedHashtags: text("saved_hashtags").array().default([]), // Array of saved hashtags for the property
-  hostSignature: text("host_signature").default(""), // Optional host signature for personal touch in messages
+  hostSignature: text("host_signature").default("").notNull(), // Optional host signature for personal touch in messages
 });
 
 export const contents = pgTable("contents", {
