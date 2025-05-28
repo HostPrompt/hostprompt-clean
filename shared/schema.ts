@@ -46,8 +46,10 @@ export const insertUserSchema = createInsertSchema(users).pick({
   password: true,
 });
 
-export const insertPropertySchema = createInsertSchema(properties).omit({
-  id: true,
+export const insertPropertySchema = createInsertSchema(properties)
+.omit({ id: true })
+.extend({
+   hostSignature: z.string().nullable(), 
 });
 
 export const insertContentSchema = createInsertSchema(contents).omit({
