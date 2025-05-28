@@ -1,1 +1,5 @@
-export default function App() { return <div>App Component</div>; }
+import React from 'react';
+
+export default function App() {
+  return <div>App Component</div>;
+}
