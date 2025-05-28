@@ -60,7 +60,9 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
 export type InsertProperty = z.infer<typeof insertPropertySchema>;
-export type Property = typeof properties.$inferSelect;
+export type Property = Omit<typeof properties.$inferSelect, "hostSignature"> & {
+  hostSignature: string;
+};
 
 export type InsertContent = z.infer<typeof insertContentSchema>;
 export type Content = typeof contents.$inferSelect;
