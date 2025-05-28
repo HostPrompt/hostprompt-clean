@@ -162,8 +162,8 @@ export class MemStorage implements IStorage {
       brandVoiceSummary: 'Comfortable and welcoming with a touch of local charm',
       useBrandVoiceDefault: true,
       savedHashtags: [],
-      photos: null,
-      hostSignature: null,
+      photos: "[]",
+      hostSignature: "",
     };
     this.properties.set(property1.id, property1);
 
@@ -221,7 +221,7 @@ export class MemStorage implements IStorage {
   savedHashtags: property.savedHashtags !== undefined
     ? property.savedHashtags
     : existingProperty.savedHashtags,
-  hostSignature: property.hostSignature ?? existingProperty.hostSignature ?? null
+  hostSignature: property.hostSignature ?? existingProperty.hostSignature ?? ""
 };
     
     this.properties.set(id, updatedProperty);
