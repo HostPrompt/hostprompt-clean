@@ -1,0 +1,1 @@
+export default function ThankYou() { return <div>Thank You Page</div>; }

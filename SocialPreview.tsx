@@ -1,0 +1,1 @@
+export default function SocialPreview() { return <div>Social Preview</div>; }
