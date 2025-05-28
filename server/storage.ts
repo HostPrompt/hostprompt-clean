@@ -74,11 +74,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteProperty(id: number): Promise<boolean> {
-    const result = await db
-      .delete(properties)
-      .where(eq(properties.id, id));
-    return result.rowCount > 0;
-  }
+  const result = await db
+    .delete(properties)
+    .where(eq(properties.id, id));
+
+  return result?.rowCount !== null && result?.rowCount > 0;
+}
+
 
   // Content operations
   async getContent(id: number): Promise<Content | undefined> {
@@ -111,12 +113,12 @@ export class DatabaseStorage implements IStorage {
     return updatedContent || undefined;
   }
 
-  async deleteContent(id: number): Promise<boolean> {
-    const result = await db
-      .delete(contents)
-      .where(eq(contents.id, id));
-    return result.rowCount > 0;
-  }
+ async deleteContent(id: number): Promise<boolean> {
+  const result = await db
+    .delete(contents)
+    .where(eq(contents.id, id));
+
+  return result?.rowCount !== null && result?.rowCount > 0;
 }
 
 // Temporary memory storage for demonstration
@@ -161,6 +163,7 @@ export class MemStorage implements IStorage {
       useBrandVoiceDefault: true,
       savedHashtags: [],
       photos: null
+      hostSignature: null,
     };
     this.properties.set(property1.id, property1);
 
