@@ -215,13 +215,16 @@ export class MemStorage implements IStorage {
 
     // Create an updated property with the new values
     const updatedProperty = { 
-      ...existingProperty,
-      ...property,
-      // Ensure savedHashtags is properly assigned to this specific property
-      savedHashtags: property.savedHashtags !== undefined 
-        ? property.savedHashtags 
-        : existingProperty.savedHashtags
-    };
+  ...existingProperty,
+  ...property,
+  // Ensure savedHashtags is properly assigned to this specific property
+  savedHashtags: property.savedHashtags !== undefined
+    ? property.savedHashtags
+    : existingProperty.savedHashtags,
+  hostSignature: property.hostSignature !== undefined
+    ? property.hostSignature ?? null
+    : existingProperty.hostSignature,
+};
     
     this.properties.set(id, updatedProperty);
     return updatedProperty;
