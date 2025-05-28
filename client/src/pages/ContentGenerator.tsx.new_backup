@@ -1,0 +1,645 @@
+import { useState, useEffect, useRef, ChangeEvent } from "react";
+import { usePropertyStore } from "@/store/propertyStore";
+import { useContentStore } from "@/store/contentStore";
+import { useLocation } from "wouter";
+import Header from "@/components/Header";
+import Navigation from "@/components/Navigation";
+import PropertySelector from "@/components/PropertySelector";
+import ContentPreview from "@/components/ContentPreview";
+import { useToast } from "@/hooks/use-toast";
+import { createImagePreview } from "@/lib/utils";
+import { 
+  ChevronRight, 
+  Info, 
+  Edit, 
+  Copy,
+  Upload,
+  X,
+  ImageIcon,
+  Save
+} from "lucide-react";
+
+interface ContentGeneratorProps {
+  mobileMenuOpen: boolean;
+  setMobileMenuOpen: (open: boolean) => void;
+}
+
+export default function ContentGenerator({ mobileMenuOpen, setMobileMenuOpen }: ContentGeneratorProps) {
+  const [activeTab, setActiveTab] = useState("generator");
+  const { selectedProperty, selectProperty } = usePropertyStore();
+  const { 
+    contentType, setContentType, 
+    brandVoice, setBrandVoice, 
+    ctaEnhancements, setCTAEnhancements, 
+    generateContent, loading,
+    generatedContent,
+    photoData, setPhotoData, clearPhotoData,
+    currentLoadingMessage,
+    contentLength, setContentLength,
+    customWordCount, setCustomWordCount,
+    saveContent
+  } = useContentStore();
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const [showCustomLength, setShowCustomLength] = useState(false);
+  const generatedContentRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Scroll to top on page load
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  // Scroll to generated content when it's available
+  useEffect(() => {
+    if (generatedContent && generatedContentRef.current) {
+      generatedContentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [generatedContent]);
+
+  const handlePhotoUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Check file size (10MB max for initial upload - we'll compress it)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Please select an image under 10MB",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid file type",
+        description: "Please select an image file",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    try {
+      // Show loading toast
+      toast({
+        title: "Processing image",
+        description: "Optimizing your photo for best quality...",
+      });
+      
+      // Compress image and create preview URL
+      const { file: compressedFile, url: previewUrl } = await createImagePreview(file);
+      
+      // Calculate compression percentage
+      const compressionPercent = Math.round((1 - (compressedFile.size / file.size)) * 100);
+      
+      // Show success message if compression was significant
+      if (compressionPercent > 20) {
+        toast({
+          title: "Image optimized",
+          description: `Reduced file size by ${compressionPercent}% while preserving quality.`,
+        });
+      }
+      
+      // Update photoData in store
+      setPhotoData({
+        file: compressedFile,
+        preview: previewUrl,
+        description: null
+      });
+    } catch (error) {
+      console.error('Error processing image:', error);
+      
+      // Fallback to uncompressed version
+      const previewUrl = URL.createObjectURL(file);
+      setPhotoData({
+        file,
+        preview: previewUrl,
+        description: null
+      });
+      
+      toast({
+        title: "Image processing issue",
+        description: "Using original image instead. Everything should still work fine.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const triggerFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleGenerateContent = async () => {
+    if (!selectedProperty) {
+      toast({
+        title: "No property selected",
+        description: "Please select a property to generate content",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await generateContent(selectedProperty);
+    } catch (error) {
+      toast({
+        title: "Oops! Couldn't generate this time",
+        description: "Try again or upload a new photo",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const capitalizeFirstLetter = (string: string) => {
+    return string.charAt(0).toUpperCase() + string.slice(1);
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-neutral-50 pb-16 md:pb-0">
+      <Header mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+      <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
+
+      <main className="flex-1">
+        <div className="max-w-7xl mx-auto p-4 md:p-6 mt-2">
+          <div className="mb-8">
+            <h2 className="text-2xl font-heading font-semibold text-neutral-800 mb-3">Create with HostPrompt</h2>
+            <p className="text-neutral-600">Craft engaging content for your properties that connects with guests.</p>
+          </div>
+
+          {/* Brand Voice Preview */}
+          {selectedProperty && (
+            <div className="bg-white border border-neutral-200 rounded-xl shadow-sm p-4 mb-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">Using: <span className="font-medium text-primary-500">{capitalizeFirstLetter(brandVoice.tone)} + {capitalizeFirstLetter(brandVoice.style)}</span> from Property Profile</p>
+                </div>
+                <button 
+                  onClick={() => setLocation('/property')}
+                  className="mt-2 sm:mt-0 text-sm text-primary-500 font-medium hover:underline flex items-center"
+                >
+                  <Edit className="h-3.5 w-3.5 mr-1" />
+                  Edit Voice
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column - Property Selection & Settings */}
+            <div className="lg:col-span-1">
+              {/* Property Selector Component with enhanced visual styling */}
+              <PropertySelector 
+                onSelect={selectProperty} 
+                selectedProperty={selectedProperty} 
+              />
+
+              {/* Photo Upload Section */}
+              <div className="bg-white border border-neutral-200 rounded-xl shadow-sm p-5 mt-6">
+                <h3 className="font-heading font-medium text-lg mb-3">Give us a photo to inspire your content</h3>
+                <p className="text-sm text-neutral-600 mb-4">Photos bring your content to life — we'll see what makes your space special and weave those details into your story.</p>
+                
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handlePhotoUpload} 
+                  accept="image/*" 
+                  className="hidden" 
+                />
+                
+                {photoData.preview ? (
+                  <div className="mb-4">
+                    <div className="relative rounded-lg overflow-hidden">
+                      <img 
+                        src={photoData.preview} 
+                        alt="Preview" 
+                        className="w-full h-48 object-cover"
+                      />
+                      <button 
+                        onClick={() => {
+                          clearPhotoData();
+                          if (fileInputRef.current) {
+                            fileInputRef.current.value = '';
+                          }
+                        }}
+                        className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md hover:bg-neutral-100 transition-colors"
+                        aria-label="Remove photo"
+                      >
+                        <X className="h-5 w-5 text-neutral-700" />
+                      </button>
+                    </div>
+                    <p className="text-xs text-neutral-500 mt-2">
+                      We'll use the details in this photo to personalize your story
+                    </p>
+                  </div>
+                ) : (
+                  <div 
+                    onClick={triggerFileInput}
+                    className="border-2 border-dashed border-neutral-300 rounded-lg p-6 text-center cursor-pointer hover:bg-neutral-50 transition-colors"
+                  >
+                    <ImageIcon className="h-8 w-8 mx-auto text-neutral-400 mb-2" />
+                    <p className="text-sm font-medium text-neutral-700">
+                      Add a photo of your space
+                    </p>
+                    <p className="text-xs text-neutral-500 mt-1">
+                      Large photos? No worries — we'll optimize them for you
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Content Settings */}
+              <div className="bg-white border border-neutral-200 rounded-xl shadow-sm p-5 mt-6">
+                {/* Content Type Dropdown */}
+                <h3 className="font-heading font-medium text-lg mb-3">What do you want to create?</h3>
+                <div className="mb-6">
+                  <select
+                    value={contentType}
+                    onChange={(e) => setContentType(e.target.value)}
+                    className="w-full p-3 bg-white border border-neutral-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-neutral-700"
+                  >
+                    <option value="social_media_caption">Social Media Caption</option>
+                    <option value="listing_description">Listing Description</option>
+                    <option value="welcome_message">Welcome Message</option>
+                    <option value="house_rules">House Rules Reminder</option>
+                    <option value="guest_reengagement">Guest Re-engagement Message</option>
+                  </select>
+                  
+                  {/* Content type description based on selection */}
+                  <div className="mt-2 px-1">
+                    {contentType === 'social_media_caption' && (
+                      <p className="text-xs text-neutral-500">Instagram, Facebook, TikTok. Short, visual, and eye-catching.</p>
+                    )}
+                    
+                    {contentType === 'listing_description' && (
+                      <p className="text-xs text-neutral-500">For Airbnb/Vrbo. Clear, informative, feature-focused.</p>
+                    )}
+                    
+                    {contentType === 'welcome_message' && (
+                      <p className="text-xs text-neutral-500">Sent after booking. Friendly, sets expectations, builds excitement.</p>
+                    )}
+                    
+                    {contentType === 'house_rules' && (
+                      <p className="text-xs text-neutral-500">For check-in messages. Polite but clear on expectations.</p>
+                    )}
+                    
+                    {contentType === 'guest_reengagement' && (
+                      <p className="text-xs text-neutral-500">Post-stay follow-ups, review requests, thank-yous, return offers.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Brand Voice */}
+                <h3 className="font-heading font-medium text-lg mb-3">What's the vibe you're going for?</h3>
+                <div className="space-y-4 mb-6">
+                  {selectedProperty?.brandVoice && selectedProperty.useBrandVoiceDefault ? (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="flex items-start">
+                        <div className="text-green-600 mt-0.5 mr-2">
+                          <Info className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-medium text-green-800">Using {selectedProperty.name}'s brand voice</h4>
+                          <p className="text-xs text-green-700 mt-1">
+                            Content will be generated using this property's voice settings: 
+                            <span className="font-medium"> {selectedProperty.brandVoice}</span>
+                            {selectedProperty.brandVoiceSummary && (
+                              <span> - {selectedProperty.brandVoiceSummary}</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-green-700 mt-2">
+                            You can change this in Property Profile settings
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-neutral-700 mb-1">How should it feel?</label>
+                        <select 
+                          value={brandVoice.tone}
+                          onChange={(e) => setBrandVoice({ tone: e.target.value })}
+                          className="w-full rounded-lg border-neutral-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                        >
+                          <option value="professional">Professional</option>
+                          <option value="friendly">Friendly</option>
+                          <option value="luxury">Luxury</option>
+                          <option value="casual">Casual</option>
+                          <option value="exciting">Exciting</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-neutral-700 mb-1">What's the writing style?</label>
+                        <select 
+                          value={brandVoice.style}
+                          onChange={(e) => setBrandVoice({ style: e.target.value })}
+                          className="w-full rounded-lg border-neutral-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                        >
+                          <option value="descriptive">Descriptive</option>
+                          <option value="minimalist">Minimalist</option>
+                          <option value="storytelling">Storytelling</option>
+                          <option value="direct">Direct</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Advanced Options (Collapsible) */}
+                <div>
+                  <button
+                    onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                    className="w-full flex justify-between items-center text-neutral-700 hover:text-neutral-800 font-medium text-sm mb-3"
+                  >
+                    <span className="font-heading font-medium text-lg">Advanced options</span>
+                    <ChevronRight className={`h-5 w-5 transition-transform ${showAdvancedOptions ? 'rotate-90' : ''}`} />
+                  </button>
+                  
+                  {showAdvancedOptions && (
+                    <div className="mb-6 border-t border-neutral-100 pt-3">
+                      {/* Human CTA Enhancement */}
+                      <h3 className="font-heading font-medium text-lg mb-3">How do you want it to end?</h3>
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center">
+                            <label htmlFor="cta-urgency" className="block text-sm text-neutral-700 mr-2">
+                              Urgency
+                            </label>
+                            <div className="relative group">
+                              <button className="text-neutral-400 hover:text-neutral-600">
+                                <Info className="h-4 w-4" />
+                              </button>
+                              <div className="absolute left-0 bottom-full mb-2 w-60 bg-neutral-800 text-white text-xs rounded p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                                Creates FOMO (e.g. 'Book now before it's gone!') to encourage immediate action.
+                                <div className="absolute left-2 top-full h-2 w-2 bg-neutral-800 transform rotate-45"></div>
+                              </div>
+                            </div>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              id="cta-urgency" 
+                              checked={ctaEnhancements.urgency}
+                              onChange={(e) => setCTAEnhancements({ urgency: e.target.checked })}
+                              className="sr-only peer" 
+                            />
+                            <div className={`w-11 h-6 ${ctaEnhancements.urgency ? 'bg-primary-500' : 'bg-neutral-200'} peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all`}></div>
+                          </label>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center">
+                            <label htmlFor="cta-social-proof" className="block text-sm text-neutral-700 mr-2">
+                              Social Proof
+                            </label>
+                            <div className="relative group">
+                              <button className="text-neutral-400 hover:text-neutral-600">
+                                <Info className="h-4 w-4" />
+                              </button>
+                              <div className="absolute left-0 bottom-full mb-2 w-60 bg-neutral-800 text-white text-xs rounded p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                                Adds trust elements (e.g. 'Loved by 200+ guests!') to build credibility with potential guests.
+                                <div className="absolute left-2 top-full h-2 w-2 bg-neutral-800 transform rotate-45"></div>
+                              </div>
+                            </div>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              id="cta-social-proof" 
+                              checked={ctaEnhancements.socialProof}
+                              onChange={(e) => setCTAEnhancements({ socialProof: e.target.checked })}
+                              className="sr-only peer" 
+                            />
+                            <div className={`w-11 h-6 ${ctaEnhancements.socialProof ? 'bg-primary-500' : 'bg-neutral-200'} peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all`}></div>
+                          </label>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center">
+                            <label htmlFor="cta-benefits" className="block text-sm text-neutral-700 mr-2">
+                              Benefits
+                            </label>
+                            <div className="relative group">
+                              <button className="text-neutral-400 hover:text-neutral-600">
+                                <Info className="h-4 w-4" />
+                              </button>
+                              <div className="absolute left-0 bottom-full mb-2 w-60 bg-neutral-800 text-white text-xs rounded p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                                Highlights value (e.g. 'Get exclusive perks with every booking') to emphasize what guests will gain.
+                                <div className="absolute left-2 top-full h-2 w-2 bg-neutral-800 transform rotate-45"></div>
+                              </div>
+                            </div>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              id="cta-benefits" 
+                              checked={ctaEnhancements.benefits}
+                              onChange={(e) => setCTAEnhancements({ benefits: e.target.checked })}
+                              className="sr-only peer" 
+                            />
+                            <div className={`w-11 h-6 ${ctaEnhancements.benefits ? 'bg-primary-500' : 'bg-neutral-200'} peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all`}></div>
+                          </label>
+                        </div>
+                        
+                        {/* Simplified Content Length Control */}
+                        <div className="mt-6 pt-4 border-t border-neutral-100">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center">
+                              <label className="block text-sm font-medium text-neutral-700">Choose content length</label>
+                              <div className="relative group ml-1.5">
+                                <button className="text-neutral-400 hover:text-neutral-600">
+                                  <Info className="h-4 w-4" />
+                                </button>
+                                <div className="absolute left-0 bottom-full mb-2 w-64 bg-neutral-800 text-white text-xs rounded p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                                  Control how long your post should be — perfect for quick captions, detailed descriptions, or longer content.
+                                  <div className="absolute left-2 top-full h-2 w-2 bg-neutral-800 transform rotate-45"></div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Word count display */}
+                            <div className="text-neutral-700">
+                              <span className="text-sm font-medium">Words: </span>
+                              <span className="text-sm font-bold">{customWordCount}</span>
+                            </div>
+                          </div>
+                          
+                          {/* Dynamic word count slider */}
+                          <div className="mt-2 space-y-4">
+                            {/* Slider control */}
+                            <div>
+                              <input
+                                type="range"
+                                min="5"
+                                max="300"
+                                step="5"
+                                value={customWordCount}
+                                onChange={(e) => {
+                                  const value = parseInt(e.target.value);
+                                  setCustomWordCount(value);
+                                  
+                                  // Update content length category based on word count
+                                  if (value <= 20) setContentLength('short');
+                                  else if (value <= 75) setContentLength('medium');
+                                  else setContentLength('long');
+                                }}
+                                className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-[#FF5C5C]"
+                              />
+                              
+                              {/* Range indicators */}
+                              <div className="flex justify-between mt-1 text-xs text-neutral-500">
+                                <span>5</span>
+                                <span>150</span>
+                                <span>300</span>
+                              </div>
+                            </div>
+                            
+                            {/* Quick selection preset buttons */}
+                            <div className="flex justify-between items-center mt-2">
+                              <button 
+                                onClick={() => {
+                                  setContentLength('short');
+                                  setCustomWordCount(15);
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                  customWordCount <= 20
+                                    ? 'bg-[#FF5C5C] text-white' 
+                                    : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                                }`}
+                              >
+                                Short (~15 words)
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  setContentLength('medium');
+                                  setCustomWordCount(50);
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                  customWordCount > 20 && customWordCount <= 75
+                                    ? 'bg-[#FF5C5C] text-white' 
+                                    : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                                }`}
+                              >
+                                Medium (~50 words)
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  setContentLength('long');
+                                  setCustomWordCount(150);
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                  customWordCount > 75
+                                    ? 'bg-[#FF5C5C] text-white' 
+                                    : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                                }`}
+                              >
+                                Long (~150+ words)
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                  )}
+                </div>
+
+                <button 
+                  onClick={handleGenerateContent} 
+                  disabled={!selectedProperty || loading}
+                  className={`w-full rounded-lg px-4 py-3 font-medium transition-colors ${
+                    !selectedProperty || loading
+                      ? 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
+                      : 'bg-[#FF5C5C] hover:bg-[#FF7070] text-white'
+                  }`}
+                >
+                  <span className="font-semibold">{loading ? currentLoadingMessage : 'Create Content'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Right Column - Created Content */}
+            <div className="bg-white border border-neutral-200 rounded-xl shadow-sm lg:col-span-2" ref={generatedContentRef}>
+              <div className="p-5 border-b border-neutral-200">
+                <h3 className="font-heading font-medium text-lg">
+                  {generatedContent 
+                    ? "Here's your content — polished, on-brand, and ready to share." 
+                    : "Your Content"}
+                </h3>
+              </div>
+              
+              {/* Loading State with Animation */}
+              {loading && (
+                <div className="p-5">
+                  <div className="animate-pulse space-y-3">
+                    <div className="h-5 bg-neutral-200 rounded w-3/4"></div>
+                    <div className="h-5 bg-neutral-200 rounded"></div>
+                    <div className="h-5 bg-neutral-200 rounded"></div>
+                    <div className="h-5 bg-neutral-200 rounded w-1/2"></div>
+                    <div className="h-5 bg-neutral-200 rounded w-2/3"></div>
+                    <div className="h-5 bg-neutral-200 rounded"></div>
+                    <div className="h-5 bg-neutral-200 rounded w-3/4"></div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Content Preview Component */}
+              {!loading && (
+                <div className="p-5">
+                  {generatedContent && (
+                    <div className="mb-4">
+                      {/* Save button moved closer to the content and more prominent */}
+                      <button 
+                        onClick={() => {
+                          saveContent();
+                          toast({
+                            title: "Content saved",
+                            description: "Your content is now in your library"
+                          });
+                        }}
+                        className="w-full mb-3 py-2 bg-[#FF5C5C] hover:bg-[#FF7070] text-white rounded-lg text-sm font-medium flex items-center justify-center"
+                      >
+                        <Save className="h-4 w-4 mr-2" />
+                        Add to My Library
+                      </button>
+                      
+                      {/* Action buttons aligned together */}
+                      <div className="flex justify-center space-x-4">
+                        <button 
+                          onClick={() => {
+                            if (generatedContent.content) {
+                              navigator.clipboard.writeText(generatedContent.content);
+                              toast({
+                                title: "Copied to clipboard",
+                                description: "Content has been copied to your clipboard"
+                              });
+                            }
+                          }}
+                          className="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center"
+                        >
+                          <Copy className="h-4 w-4 mr-1" />
+                          Copy to clipboard
+                        </button>
+                        
+                        <button 
+                          onClick={() => setLocation('/preview')}
+                          className="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center"
+                        >
+                          <Upload className="h-4 w-4 mr-1" />
+                          Use Content
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <ContentPreview />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}

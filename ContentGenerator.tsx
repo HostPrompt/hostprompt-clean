@@ -1,1 +1,0 @@
-export default function ContentGenerator() { return <div>Content Generator</div>; }
