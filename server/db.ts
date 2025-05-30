@@ -1,43 +1,50 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from "ws";
-import * as schema from "@shared/schema";
+import { readFileSync } from 'fs';
+import * as dotenv from 'dotenv';
+import { Pool } from 'pg'; // ✅ standard pg client
+import { drizzle } from 'drizzle-orm/node-postgres'; // ✅ correct adapter for pg
+import * as schema from '@shared/schema';
 
-// For WebSocket support in serverless environments
-neonConfig.webSocketConstructor = ws;
+// Load environment variables
+dotenv.config();
 
-// Enhanced error handling for database connection
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
-  );
+// Debug: log DATABASE_URL from process.env
+console.log('[DEBUG] Raw DATABASE_URL from .env:', JSON.stringify(process.env.DATABASE_URL));
+
+// Optional: log entire .env content (remove if no longer needed)
+try {
+  const rawEnv = readFileSync(new URL('../.env', import.meta.url), 'utf-8');
+  console.log('Raw env:', rawEnv);
+} catch (err) {
+  console.warn('Could not read .env file directly:', err);
 }
 
-// Create connection pool with better error handling
-export const pool = new Pool({ 
+// Validate env var
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL must be set. Did you forget to provision a database?');
+}
+
+// ✅ Create pg connection pool with SSL enabled for Supabase
+export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 10, // Maximum number of clients the pool should contain
-  idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
-  connectionTimeoutMillis: 5000, // How long to wait before timing out when connecting a new client
+  ssl: {
+    rejectUnauthorized: false, // required by Supabase
+  },
 });
 
-// Log connection events for monitoring
+// Optional: log pool errors
 pool.on('error', (err) => {
   console.error('Unexpected error on idle database client', err);
-  process.exit(-1); // Recommended by pg docs to handle critical connection errors
+  process.exit(-1);
 });
 
-// Initialize Drizzle ORM with the pool
-export const db = drizzle({ client: pool, schema });
+// ✅ Initialize Drizzle ORM
+export const db = drizzle(pool, { schema });
 
-// Function to test database connection
+// ✅ Function to test DB connection
 export async function testDatabaseConnection() {
   let client;
   try {
-    // Acquire a client from the pool
     client = await pool.connect();
-    
-    // Test with a simple query
     const result = await client.query('SELECT NOW()');
     console.log('Database connection test successful:', result.rows[0]);
     return true;
@@ -45,7 +52,6 @@ export async function testDatabaseConnection() {
     console.error('Database connection test failed:', error);
     return false;
   } finally {
-    // Release client back to the pool
     if (client) client.release();
   }
 }
